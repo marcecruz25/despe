@@ -8,14 +8,13 @@ import com.google.gson.Gson;
 import org.apache.commons.lang3.time.StopWatch;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -30,9 +29,13 @@ public class DespegarServiceImpl implements DespegarService {
     private String id = "";
 
     private List<Line> lineList = new ArrayList<>();
+    private FileWriter fichero;
+    private BufferedWriter bufferedWriter;
+    private static int linesSuccess = 0;
+    private static int linesFailure = 0;
 
     @Override
-    public void startApp() {
+    public void startApp() throws IOException {
 
         System.out.println("Please type the file path and name (example /filepath/filename:");
         Scanner scanner = new Scanner(System.in);
@@ -40,10 +43,13 @@ public class DespegarServiceImpl implements DespegarService {
         /*Gson gson = new Gson();
         final Line myClass = gson.fromJson(fileName.toString(), Line.class);*/
         StopWatch timer = StopWatch.createStarted();
+        fichero = new FileWriter("/home/marcelo.cruz/Downloads/salida.txt");
+        bufferedWriter = new BufferedWriter(fichero);
 
         try(Stream<String> stream = Files.lines(Paths.get(fileName))) {
             stream.forEach(this::saveLineReaded);
             createJson();
+            linesSuccess++;
         } catch (IOException io){
             io.printStackTrace();
         }
@@ -51,6 +57,8 @@ public class DespegarServiceImpl implements DespegarService {
         timer.stop();
         System.out.println("App executed in : " + timer.getTime(TimeUnit.MILLISECONDS) + " ms");
         scanner.close();
+        bufferedWriter.close();
+        fichero.close();
     }
 
 
@@ -58,21 +66,26 @@ public class DespegarServiceImpl implements DespegarService {
         try {
 
             String[] parsedLine = lineString.split(" ");
-            SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+            if (isValidData(parsedLine)) {
+                SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 
-            Line line = new Line();
-            line.setStart(formatter.parse(parsedLine[0].length() < 24 ? parsedLine[0].replace("Z", ".000Z") : parsedLine[0]));
-            line.setEnd(formatter.parse(parsedLine[1].length() < 24 ? parsedLine[1].replace("Z", ".000Z") : parsedLine[1]));
-            line.setService(parsedLine[3]);
-            line.setSpan(parsedLine[4]);
+                Line line = new Line();
+                line.setStart(formatter.parse(parsedLine[0].length() < 24 ? parsedLine[0].replace("Z", ".000Z") : parsedLine[0]));
+                line.setEnd(formatter.parse(parsedLine[1].length() < 24 ? parsedLine[1].replace("Z", ".000Z") : parsedLine[1]));
+                line.setService(parsedLine[3]);
+                line.setSpan(parsedLine[4]);
 
-            if(id.isEmpty() || id.equalsIgnoreCase(parsedLine[2])) {
-                id = parsedLine[2];
-                lineList.add(line);
+                if(id.isEmpty() || id.equalsIgnoreCase(parsedLine[2])) {
+                    id = parsedLine[2];
+                    lineList.add(line);
+                } else {
+                    createJson();
+                    linesSuccess++;
+                    id = "";
+                    lineList.add(line);
+                }
             } else {
-                createJson();
-                id = "";
-                lineList.add(line);
+                linesFailure++;
             }
         } catch (Exception e){
             e.printStackTrace();
@@ -80,7 +93,7 @@ public class DespegarServiceImpl implements DespegarService {
     }
 
 
-    public void createJson() {
+    public void createJson() throws IOException {
 
         Collections.reverse(lineList);
         RequestObject obj = new RequestObject();
@@ -112,6 +125,7 @@ public class DespegarServiceImpl implements DespegarService {
         }
         root.setCalls(listRoot);
         obj.setRoot(root);
+        bufferedWriter.write(obj.toString() + "\n");
         System.out.println(obj.toString() + "\n");
     }
 
@@ -127,7 +141,6 @@ public class DespegarServiceImpl implements DespegarService {
         return leafs;
     }
 
-
     public Root convertToRoot(Line line) {
         Root leaf = new Root();
         leaf.setStart(line.getStart());
@@ -135,5 +148,14 @@ public class DespegarServiceImpl implements DespegarService {
         leaf.setSpan(line.getSpan()[1]);
         leaf.setService(line.getService());
         return leaf;
+    }
+
+    private boolean isValidData(String[] parsedLine) {
+        if (parsedLine.length != 5) return false;
+
+        for (String valores : parsedLine) {
+            if (valores.isEmpty()) return false;
+        }
+        return true;
     }
 }
