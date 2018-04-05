@@ -12,7 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -28,46 +28,48 @@ public class DespegarServiceImpl implements DespegarService {
     private BufferedWriter bufferedWriter;
     private static int linesSuccess = 0;
     private static int linesFailure = 0;
-    private String path = "/home/marcelo.cruz/Downloads/";
     HashMap<String, List<Line>> lines = new HashMap<>();
 
     @Override
     public void startApp() throws IOException {
-        boolean finished = true;
-        long startTime = System.currentTimeMillis();
-        System.out.println("Please type the file path and name (example /filepath/filename:");
-        Scanner scanner = new Scanner(System.in);
-        String fileName = scanner.next();
-        System.out.println("Please type the file path and name to save of Json (example /filepath/filename:");
-        String fileNameToSave = scanner.next();
-        StopWatch timer = StopWatch.createStarted();
-        fichero = new FileWriter("/home/marcelo.cruz/Downloads/" + fileNameToSave);
-        bufferedWriter = new BufferedWriter(fichero);
-        while (finished || (System.currentTimeMillis() - startTime ) < 100) {
-            try {
-
-                Stream<String> stream = Files.lines(Paths.get(path + fileName));
-                stream.forEach(this::saveLineReaded);
-                finished = false;
-            } catch (IOException io){
-                io.printStackTrace();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        processListLine();
-        prepareToCreateJson();
-        timer.stop();
-        System.out.println("App executed in : " + timer.getTime(TimeUnit.MILLISECONDS) + " ms");
-        System.out.println("App executed total of traces " + (linesSuccess + linesFailure) + ", " + linesSuccess + " was success and " + linesFailure + " failure");
-        scanner.close();
-        bufferedWriter.close();
-        fichero.close();
+        processMain();
     }
 
+    private void processMain() throws IOException {
+        try {
+            System.out.println("Please type the file path and name (example /filepath/filename.txt:");
+            Scanner scanner = new Scanner(System.in);
+            String fileName = scanner.next();
+            System.out.println("Please type the file path and name to save of Json (example /filepath/filename.txt:");
+            String fileNameToSave = scanner.next();
+            StopWatch timer = StopWatch.createStarted();
+            fichero = new FileWriter(fileNameToSave);
+            bufferedWriter = new BufferedWriter(fichero);
 
-    public void saveLineReaded(String lineString) {
+            Stream<String> stream = Files.lines(Paths.get(fileName));
+            stream.forEach(this::saveLineReaded);
+
+            processListLine();
+            prepareToCreateJson();
+            timer.stop();
+            System.out.println("App executed in : " + timer.getTime(TimeUnit.MILLISECONDS) + " ms");
+            System.out.println("App executed total of traces " + (linesSuccess + linesFailure) + ", " + linesSuccess + " was success and " + linesFailure + " failure");
+            scanner.close();
+        } catch (IOException io){
+            io.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (null != bufferedWriter) {
+                bufferedWriter.close();
+            }
+            if (null != fichero) {
+                fichero.close();
+            }
+        }
+    }
+
+    private void saveLineReaded(String lineString) {
         try {
             String[] parsedLine = lineString.split(" ");
             if (isValidData(parsedLine)) {
@@ -88,8 +90,7 @@ public class DespegarServiceImpl implements DespegarService {
         }
     }
 
-    public void createJson(String id, List<Line> lineList) throws IOException {
-
+    private void createJson(String id, List<Line> lineList) throws IOException {
         Collections.reverse(lineList);
         RequestObject obj = new RequestObject();
         obj.setId(id);
@@ -183,8 +184,7 @@ public class DespegarServiceImpl implements DespegarService {
 
     private void prepareToCreateJson() throws IOException {
         for (Map.Entry<String, List<Line>> entry : lines.entrySet()) {
-            String id = entry.getKey();
-            createJson(id, entry.getValue());
+            createJson(entry.getKey(), entry.getValue());
             linesSuccess++;
         }
     }
